@@ -1,11 +1,11 @@
+# pylint: disable=missing-function-docstring, missing-class-docstring, missing-module-docstring
 import logging
 import asyncio
 from homeassistant.core import HomeAssistant
 from .sensor import RenogyBLESensor, update_sensors
 from .ShuntClient import ShuntClient
-from .RoverClient import RoverClient
 from .Utils import *
-from . import Utils
+from . import utils as Utils
 from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
 _LOGGER = logging.getLogger(__name__)
 
@@ -87,7 +87,7 @@ async def async_setup(hass: HomeAssistant, haconfig: dict):
 
     # Connection coroutine
     async def connect_client(cfg):
-        client_cls = RoverClient if cfg.get('type') == 'RNG_CTRL' else ShuntClient
+        client_cls = ShuntClient
         client = client_cls(cfg, on_data_received, on_error)
         while True:
             try:

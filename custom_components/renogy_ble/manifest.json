@@ -1,0 +1,12 @@
+{
+  "domain": "renogy_ble",
+  "name": "Renogy BLE (Smart Shunt)",
+  "version": "1.0.0",
+  "documentation": "https://github.com/antflix/renogy-ble",
+  "dependencies": [],
+  "codeowners": ["@antflix"],
+  "requirements": [
+    "gatt"
+  ],
+  "iot_class": "local_polling"
+}

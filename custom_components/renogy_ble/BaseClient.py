@@ -19,7 +19,6 @@ import asyncio
 import configparser
 import logging
 import traceback
-from .BLEManager import BLEManager
 from .Utils import bytes_to_int, crc16_modbus, int_to_bytes
 
 # Base class that works with all Renogy family devices
@@ -63,19 +62,8 @@ class BaseClient:
             self.__on_error(e)
 
     async def connect(self):
-        self.ble_manager = BLEManager(mac_address=self.config['device']['mac_addr'], alias=self.config['device']['alias'], on_data=self.on_data_received, on_connect_fail=self.__on_connect_fail, notify_uuid=NOTIFY_CHAR_UUID, write_uuid=WRITE_CHAR_UUID)
-        await self.ble_manager.discover()
-
-        if not self.ble_manager.device:
-            logging.error(f"Device not found: {self.config['device']['alias']} => {self.config['device']['mac_addr']}, please check the details provided.")
-            for dev in self.ble_manager.discovered_devices:
-                if dev.name != None and dev.name.startswith(tuple(ALIAS_PREFIXES)):
-                    logging.info(f"Possible device found! ====> {dev.name} > [{dev.address}]")
-            self.stop()
-        else:
-            await self.ble_manager.connect()
-            if self.ble_manager.client and self.ble_manager.client.is_connected:
-                await self.read_section()
+        # Deprecated method. BLEManager is no longer used.
+        pass
 
     async def disconnect(self):
         if self.ble_manager:

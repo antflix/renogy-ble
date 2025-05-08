@@ -29,10 +29,16 @@ class BaseClient:
             dev = config['device']
         else:
             dev = config
-        # Read parameters with defaults
-        self.device_id = int(dev.get('device_id', 0))
-        self.alias = dev.get('alias')
-        self.mac = dev.get('mac_addr')
+        # Read parameters with validation
+        if 'device_id' not in dev:
+            raise ValueError("Missing required config value: device_id")
+        self.device_id = int(dev['device_id'])
+        if 'alias' not in dev:
+            raise ValueError("Missing required config value: alias")
+        if 'mac_addr' not in dev:
+            raise ValueError("Missing required config value: mac_addr")
+        self.alias = dev['alias']
+        self.mac = dev['mac_addr']
         # Ensure adapter has a fallback default
         self.adapter = dev.get('adapter') or 'hci0'
         self.sections = []

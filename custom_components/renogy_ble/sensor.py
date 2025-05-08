@@ -1,3 +1,4 @@
+ # pylint: disable=missing-function-docstring, missing-class-docstring, missing-module-docstring
 """
 This file is part of renogy_ble.
 
@@ -21,27 +22,6 @@ from homeassistant.helpers.entity import Entity
 DOMAIN = "renogy_ble"
 
 SENSOR_TYPES = {
-    'battery_percentage': ['Battery Percentage', '%'],
-    'battery_voltage': ['Battery Voltage', 'V'],
-    'battery_current': ['Battery Current', 'A'],
-    'battery_temperature': ['Battery Temperature', '°C'],
-    'controller_temperature': ['Controller Temperature', '°C'],
-    'load_status': ['Load Status', None],
-    'load_voltage': ['Load Voltage', 'V'],
-    'load_current': ['Load Current', 'A'],
-    'load_power': ['Load Power', 'W'],
-    'pv_voltage': ['PV Voltage', 'V'],
-    'pv_current': ['PV Current', 'A'],
-    'pv_power': ['PV Power', 'W'],
-    'max_charging_power_today': ['Max Charging Power Today', 'W'],
-    'max_discharging_power_today': ['Max Discharging Power Today', 'W'],
-    'charging_amp_hours_today': ['Charging Amp Hours Today', 'Ah'],
-    'discharging_amp_hours_today': ['Discharging Amp Hours Today', 'Ah'],
-    'power_generation_today': ['Power Generation Today', 'Wh'],
-    'power_consumption_today': ['Power Consumption Today', 'Wh'],
-    'power_generation_total': ['Power Generation Total', 'Wh'],
-    'charging_status': ['Charging Status', None],
-    'battery_type': ['Battery Type', None],
     # Shunt-specific sensors
     'charge_battery_voltage': ['Charge Battery Voltage', 'V'],
     'starter_battery_voltage': ['Starter Battery Voltage', 'V'],

@@ -90,7 +90,13 @@ class Device(gatt.Device):
 
     def characteristic_write_value(self, value):
         logging.debug(msg="DEBUG characteristic_write_value")
-        if not self.write_characteristic: return
+
+        if not self.write_char_uuid:
+            logging.warning("Attempted write but write_uuid is empty. Check device configuration.")
+
+        if not self.write_characteristic:
+            return
+
         self.write_characteristic.write_value(value)
         self.writing = value
 

@@ -1,0 +1,11 @@
+{
+    "name": "Renogy BLE (incl. Shunt)",
+    "render_readme": true,
+    "description": "Home Assistant integration for Renogy Smart Shunt and Rover controllers via Bluetooth.",
+    "domains": ["renogy_ble"],
+    "country": "US",
+    "homeassistant": "2023.0.0",
+    "iot_class": "local_polling",
+    "codeowners": ["@antflix"],
+    "documentation": "https://github.com/antflix/renogy-ble"
+}
