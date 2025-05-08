@@ -1,0 +1,34 @@
+Changelog BLEManager
+General Changes:
+Increased Discovery Timeout:
+Changed DISCOVERY_TIMEOUT from 5 seconds to 10 seconds.
+Added Connection Retry Mechanism:
+Introduced MAX_RETRIES (set to 100) and RETRY_DELAY (set to 10 seconds) for connection attempts.
+Prevent Multiple Simultaneous Connection Attempts:
+Added self.is_connecting flag to prevent multiple simultaneous connection attempts.
+Specific Changes:
+Initialization (__init__ method):
+
+Converted mac_address to uppercase during initialization.
+Added self.is_connecting flag.
+Discovery (discover method):
+
+Removed redundant mac_address conversion to uppercase.
+Added an early return after finding the first matching device.
+Connection (connect method):
+
+Added check for self.is_connecting to prevent duplicate connection attempts.
+Implemented retry logic with MAX_RETRIES and RETRY_DELAY.
+Moved characteristic setup to a new method setup_characteristics.
+Characteristic Setup (setup_characteristics method):
+
+Created a new method to handle characteristic setup after a successful connection.
+Notification Callback (notification_callback method):
+
+Updated log message to be more descriptive.
+Characteristic Write Value (characteristic_write_value method):
+
+Updated log messages for clarity.
+Disconnect (disconnect method):
+
+Added a log message for cases where there is no active connection to disconnect.

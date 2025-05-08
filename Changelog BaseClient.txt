@@ -1,0 +1,12 @@
+Changelog BaseClient
+Added
+Event loop creation in __init__ method using _get_or_create_event_loop to ensure the event loop is properly assigned.
+Error logging in start method for better debugging when the client fails to start.
+Changed
+READ_TIMEOUT increased from 15 seconds to 20 seconds.
+Event loop management moved to _get_or_create_event_loop method to handle the creation and assignment of the event loop more robustly.
+Polling check in check_polling method to ensure polling is enabled before sleeping and reading sections.
+Fixed
+Event loop assignment in __init__ method to avoid potential issues with unassigned event loops.
+Removed
+Future creation in start method, simplifying the event loop management.

@@ -1,0 +1,12 @@
+{
+  "domain": "renogy_ble",
+  "name": "Renogy BLE (incl. Shunt)",
+  "version": "1.0.0",
+  "documentation": "https://www.example.com",
+  "dependencies": [],
+  "codeowners": ["@your_github_username"],
+  "requirements": [
+    "bleak>=0.14.0",
+    "gatt"
+  ]
+}
