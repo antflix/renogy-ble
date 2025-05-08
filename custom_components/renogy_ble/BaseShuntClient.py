@@ -1,61 +1,57 @@
+
 import os
-from threading import Timer
 import logging
 import configparser
-import time
+import asyncio
 from .Utils import bytes_to_int, int_to_bytes, crc16_modbus
 from .BLE import DeviceManager, Device
-
-# Base class that works with all Renogy family devices
-# Should be extended by each client with its own parsers and section definitions
-# Section example: {'register': 5000, 'words': 8, 'parser': self.parser_func}
 
 ALIAS_PREFIX = 'RMTShunt300'
 ALIAS_PREFIX_PRO = 'Shunt300'
 NOTIFY_CHAR_UUID = "0000c411-0000-1000-8000-00805f9b34fb"
-WRITE_CHAR_UUID  = "" # RMTShunt sends all data over notify to any connected device
-READ_TIMEOUT = 30 # (seconds)
+WRITE_CHAR_UUID  = ""
+READ_TIMEOUT = 30
+RECONNECT_DELAY = 5
+MAX_RECONNECT_ATTEMPTS = 15
 
-RECONNECT_DELAY = 5  # Time in seconds to wait before reconnecting
-MAX_RECONNECT_ATTEMPTS = 15  # Maximum number of reconnect attempts
-
-class BaseClient:
+class BaseShuntClient:
     def __init__(self, config):
         self.config = config
-        # Determine device config mapping (dict or SectionProxy)
-        if isinstance(config, dict):
-            dev = config
-        elif hasattr(config, 'keys') and 'device' in config:
-            dev = config['device']
-        else:
-            dev = config
-        # Read parameters with validation
-        if 'device_id' not in dev:
-            raise ValueError("Missing required config value: device_id")
+        dev = config.get('device', config)
         self.device_id = int(dev['device_id'])
-        if 'alias' not in dev:
-            raise ValueError("Missing required config value: alias")
-        if 'mac_addr' not in dev:
-            raise ValueError("Missing required config value: mac_addr")
         self.alias = dev['alias']
         self.mac = dev['mac_addr']
-        # Ensure adapter has a fallback default
-        self.adapter = dev.get('adapter') or 'hci0'
+        self.adapter = dev.get('adapter', 'hci0')
         self.sections = []
         self.section_index = 0
+        self.data = {}
+        self.loop = asyncio.get_event_loop()
+        self.read_timeout_task = None
         self.reconnect_attempts = 0
+        self.manager = None
+        self.device = None
         logging.info(f"Init {self.__class__.__name__}: {self.alias} => {self.mac}")
 
-    def connect(self):
+    def start(self):
+        asyncio.ensure_future(self._run())
+
+    async def _run(self):
+        try:
+            await self.connect()
+            await self.manager.run()
+        except Exception as e:
+            await self.__on_error(True, e)
+
+    async def connect(self):
         self.manager = DeviceManager(adapter_name=self.adapter, mac_address=self.mac, alias=self.alias)
-        self.manager.discover()
+        await self.manager.discover()
 
         if not self.manager.device_found:
-            logging.error(f"Device not found: {self.alias} => {self.mac}, please check the details provided.")
+            logging.error(f"Device not found: {self.alias} => {self.mac}")
             for dev in self.manager.devices():
-                if dev.alias() != None and (dev.alias().startswith(ALIAS_PREFIX) or dev.alias().startswith(ALIAS_PREFIX_PRO)):
-                    logging.debug(f"Possible device found! ======> {dev.alias()} > [{dev.mac_address}]")
-            self.__stop_service()
+                if dev.alias() and (dev.alias().startswith(ALIAS_PREFIX) or dev.alias().startswith(ALIAS_PREFIX_PRO)):
+                    logging.debug(f"Possible device: {dev.alias()} [{dev.mac_address}]")
+            return await self.__stop_service()
 
         self.device = Device(
             mac_address=self.mac,
@@ -66,109 +62,96 @@ class BaseClient:
             notify_uuid=NOTIFY_CHAR_UUID,
             write_uuid=WRITE_CHAR_UUID
         )
-        
+
         while self.reconnect_attempts < MAX_RECONNECT_ATTEMPTS:
             try:
-                logging.info(f"Attempting to connect, try {self.reconnect_attempts + 1}/{MAX_RECONNECT_ATTEMPTS}...\n")
-                self.device.connect()
-                self.manager.run()
-                self.reconnect_attempts = 0  # Reset attempts on successful connection
-                logging.info("Connected successfully!\n")
-                break
+                logging.info(f"Connecting (attempt {self.reconnect_attempts+1})...")
+                await self.device.connect()
+                self.reconnect_attempts = 0
+                logging.info("Connected successfully")
+                return
             except Exception as e:
                 self.reconnect_attempts += 1
-                logging.warning(f"Connection failed with error: {e}. Retrying in {RECONNECT_DELAY} seconds...\n")
-                time.sleep(RECONNECT_DELAY)
-            except KeyboardInterrupt:
-                logging.error("KeyboardInterrupt detected. Exiting...")
-                self.__on_error(False, "KeyboardInterrupt")
-                break
+                logging.warning(f"Connect failed: {e}, retrying in {RECONNECT_DELAY}s")
+                await asyncio.sleep(RECONNECT_DELAY)
 
-        if self.reconnect_attempts >= MAX_RECONNECT_ATTEMPTS:
-            logging.error("Max reconnect attempts reached. Could not establish connection.")
-            self.__on_error(True, "Max reconnect attempts reached.")
-        
-        # try:
-        #     self.device.connect()
-        #     self.manager.run()
-        # except Exception as e:
-        #     self.__on_error(True, e)
-        # except KeyboardInterrupt:
-        #     self.__on_error(False, "KeyboardInterrupt")
+        logging.error("Max reconnect attempts reached.")
+        await self.__on_error(True, "Max reconnect attempts reached.")
 
-    def disconnect(self):
-        self.device.disconnect()
-        self.__stop_service()
+    async def disconnect(self):
+        if self.device:
+            await self.device.disconnect()
+        await self.__stop_service()
 
     def __on_resolved(self):
         logging.info("resolved services")
-        # self.poll_data() if self.config['data'].getboolean('enable_polling') == True else self.read_section()
+        asyncio.ensure_future(self.poll_data() if self.config['data'].getboolean('enable_polling', False) else self.read_section())
 
-    def read_section(self):
-        index = self.section_index
-        if self.device_id == None or len(self.sections) == 0:
-            return logging.error("base client cannot be used directly")
-        # request = self.create_generic_read_request(self.device_id, 3, self.sections[index]['register'], self.sections[index]['words']) 
-        # self.device.characteristic_write_value(request)
-        # self.read_timer = Timer(READ_TIMEOUT, self.on_read_timeout)
-        # self.read_timer.start()
-        
-    def on_data_received(self, response):
-        # logging.debug(msg=f"DEBUG on_data_received")
-        # self.read_timer.cancel()
-        operation = bytes_to_int(response, 1, 1)
+    async def read_section(self):
+        # Reset data at the start of a full read cycle (section_index == 0)
+        if self.section_index == 0:
+            self.data = {}
+        if not self.sections or self.device_id is None:
+            logging.error("No sections or device_id defined")
+            return
 
-        if operation == 87: # notify operation
-            # logging.info("on_data_received: response for notify operation")
-            if (self.section_index < len(self.sections) and
-                self.sections[self.section_index]['parser'] != None and
-                self.sections[self.section_index]['words'] == len(response)):
-                # parse and update data
-                self.data = self.sections[self.section_index]['parser'](response)
-                self.__safe_callback(self.on_data_callback, self.data)
-        else:
-            logging.warn("on_data_received: unknown operation={}".format(operation))
+        req = self.create_generic_read_request(self.device_id, 3, self.sections[self.section_index]['register'], self.sections[self.section_index]['words'])
+        await self.device.characteristic_write_value(req)
+        self.read_timeout_task = self.loop.call_later(READ_TIMEOUT, lambda: asyncio.ensure_future(self.on_read_timeout()))
 
-    def on_read_timeout(self):
+    async def on_read_timeout(self):
         logging.error("on_read_timeout => please check your device_id!")
-        self.disconnect()
+        await self.disconnect()
 
-    def __on_error(self, connectFailed = False, error = None):
-        logging.error(f"Exception occured: {error}")
+    def on_data_received(self, response):
+        if self.read_timeout_task and not self.read_timeout_task.cancelled():
+            self.read_timeout_task.cancel()
+
+        operation = bytes_to_int(response, 1, 1)
+        if operation == 87 and self.section_index < len(self.sections):
+            parser = self.sections[self.section_index].get('parser')
+            if parser:
+                parsed_data = parser(response)
+                if isinstance(parsed_data, dict):
+                    self.data.update(parsed_data)
+            if self.section_index >= len(self.sections) - 1:
+                self.section_index = 0
+                self.__safe_callback(self.on_data_callback, self.data)
+                asyncio.ensure_future(self.poll_data())
+            else:
+                self.section_index += 1
+                asyncio.ensure_future(self.read_section())
+        else:
+            logging.warning(f"Unknown operation={operation}")
+
+    def create_generic_read_request(self, device_id, function, regAddr, readWrd):
+        data = [device_id, function, int_to_bytes(regAddr, 0), int_to_bytes(regAddr, 1), int_to_bytes(readWrd, 0), int_to_bytes(readWrd, 1)]
+        crc = crc16_modbus(bytes(data))
+        data.extend([crc[0], crc[1]])
+        logging.debug(f"create_request_payload {regAddr} => {data}")
+        return data
+
+    async def poll_data(self):
+        await self.read_section()
+        await asyncio.sleep(self.config['data'].getint('poll_interval', 60))
+        await self.poll_data()
+
+    async def __on_error(self, connectFailed=False, error=None):
+        logging.error(f"Exception occurred: {error}")
         self.__safe_callback(self.on_error_callback, error)
-        self.__stop_service() if connectFailed else self.disconnect()
+        await (self.__stop_service() if connectFailed else self.disconnect())
 
     def __on_connect_fail(self, error):
         logging.error(f"Connection failed: {error}")
-        # Automatically retry connecting with back-off up to MAX_RECONNECT_ATTEMPTS
-        delay = RECONNECT_DELAY
-        for attempt in range(1, MAX_RECONNECT_ATTEMPTS + 1):
-            logging.warning(f"Reconnect attempt {attempt}/{MAX_RECONNECT_ATTEMPTS} in {delay}s")
-            time.sleep(delay)
-            try:
-                self.connect()
-                logging.info("Reconnected successfully on attempt %d", attempt)
-                return
-            except Exception as e:
-                logging.error(f"Reconnect attempt {attempt} failed: {e}")
-                delay = min(delay * 2, 60)
-        # If all retries failed, propagate error
-        logging.error("Max reconnect attempts reached. Could not reconnect.")
-        self.__safe_callback(self.on_error_callback, error)
-        self.__stop_service()
+        asyncio.ensure_future(self.__on_error(True, error))
 
-    def __safe_callback(self, calback, param):
-        if calback is not None:
+    def __safe_callback(self, callback, param):
+        if callback:
             try:
-                calback(self, param)
+                callback(self, param)
             except Exception as e:
-                logging.error(f"__safe_callback => exception in callback! {e}")
+                logging.error(f"Exception in callback: {e}")
 
-    def __stop_service(self):
-        # if self.poll_timer is not None and self.poll_timer.is_alive():
-        #     self.poll_timer.cancel()
-        # if self.poll_timer is not None and self.read_timer is not None:
-        #     self.read_timer.cancel()
+    async def __stop_service(self):
         if self.manager:
-            self.manager.stop()
-        # os._exit(os.EX_OK) ## ONLY CALL IF YOU WANT TO STOP THE APP PROCESS
+            await self.manager.stop()

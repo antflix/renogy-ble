@@ -20,6 +20,7 @@ import configparser
 import logging
 import traceback
 from .Utils import bytes_to_int, crc16_modbus, int_to_bytes
+from .BLE import DeviceManager, Device
 
 # Base class that works with all Renogy family devices
 # Should be extended by each client with its own parsers and section definitions
@@ -35,7 +36,6 @@ READ_ERROR = 131
 class BaseClient:
     def __init__(self, config):
         self.config: configparser.ConfigParser = config
-        self.ble_manager = None
         self.device = None
         self.poll_timer = None
         self.read_timeout = None
@@ -62,12 +62,24 @@ class BaseClient:
             self.__on_error(e)
 
     async def connect(self):
-        # Deprecated method. BLEManager is no longer used.
-        pass
+        self.manager = DeviceManager(mac_address=self.config['device']['mac_addr'], alias=self.config['device']['alias'])
+        await self.manager.discover()
+        if not self.manager.device_found:
+            logging.error(f"Device not found: {self.config['device']['alias']} => {self.config['device']['mac_addr']}")
+            return
+        self.device = Device(
+            mac_address=self.config['device']['mac_addr'],
+            on_resolved=self.__on_resolved,
+            on_data=self.on_data_received,
+            on_connect_fail=self.__on_connect_fail,
+            notify_uuid=NOTIFY_CHAR_UUID,
+            write_uuid=WRITE_CHAR_UUID
+        )
+        await self.device.connect()
 
     async def disconnect(self):
-        if self.ble_manager:
-            await self.ble_manager.disconnect()
+        if self.device:
+            await self.device.disconnect()
 
     async def on_data_received(self, response):
         if self.read_timeout and not self.read_timeout.cancelled(): self.read_timeout.cancel()
@@ -87,7 +99,6 @@ class BaseClient:
             if self.section_index >= len(self.sections) - 1: # last section, read complete
                 self.section_index = 0
                 self.on_read_operation_complete()
-                self.data = {}
                 await self.check_polling()
             else:
                 self.section_index += 1
@@ -112,13 +123,20 @@ class BaseClient:
             await self.read_section()
 
     async def read_section(self):
+        # Reset data at the start of a full read cycle (section_index == 0)
+        if self.section_index == 0:
+            self.data = {}
         index = self.section_index
         if self.device_id is None or len(self.sections) == 0:
             return logging.error("BaseClient cannot be used directly")
 
         self.read_timeout = self.loop.call_later(READ_TIMEOUT, self.on_read_timeout)
         request = self.create_generic_read_request(self.device_id, 3, self.sections[index]['register'], self.sections[index]['words'])
-        await self.ble_manager.characteristic_write_value(request)
+        await self.device.characteristic_write_value(request)
+
+    def __on_resolved(self):
+        logging.info("resolved services")
+        self.loop.create_task(self.read_section())
 
     def create_generic_read_request(self, device_id, function, regAddr, readWrd):
         data = None
