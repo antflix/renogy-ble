@@ -45,7 +45,7 @@ async def async_setup_entry(hass, entry):
         return False
     hass.data[DOMAIN] = {}
     hass.data[DOMAIN]['entities'] = []
-    _LOGGER.info("Renogy BLE entry setup")
+    logging.info("Renogy BLE entry setup")
     return True
 
 async def async_setup(hass: HomeAssistant, haconfig: dict):
@@ -71,12 +71,12 @@ async def async_setup(hass: HomeAssistant, haconfig: dict):
             sensors.append(sensor)
             hass.states.async_set(sensor.entity_id, sensor.state, sensor.attributes)
     hass.data[DOMAIN]['entities'] = sensors
-    _LOGGER.info("Renogy BLE sensors set up successfully.")
+    logging.info("Renogy BLE sensors set up successfully.")
 
     # Define callbacks
     def on_data_received(client, data):
         filtered = Utils.filter_fields(data, conf.get('fields', []))
-        _LOGGER.info(f"{client.alias or client.mac} => {filtered}")
+        logging.info(f"{client.alias or client.mac} => {filtered}")
         if not conf.get('enable_polling', True):
             client.disconnect()
         update_sensors(hass, filtered)

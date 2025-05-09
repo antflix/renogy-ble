@@ -1,6 +1,6 @@
 import logging
 # from .BaseClient import BaseClient
-from .BaseShuntClient import BaseClient
+from .BaseShuntClient import BaseShuntClient as BaseClient
 from .Utils import bytes_to_int, parse_temperature
 
 # Read and parse BT-1 RS232 type bluetooth module connected to Renogy Rover/Wanderer/Adventurer

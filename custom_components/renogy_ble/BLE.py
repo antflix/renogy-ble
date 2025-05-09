@@ -56,7 +56,7 @@ class Device:
             logging.warning("Attempted write but write_uuid is empty.")
             return
         try:
-            await self.client.write_gatt_char(self.write_uuid, bytes(value))
+            await self.client.write_gatt_char(self.write_uuid, bytearray(value), response=True)
             logging.info("Write successful: %s", self.write_uuid)
         except Exception as e:
             logging.error("Write failed: %s", e)

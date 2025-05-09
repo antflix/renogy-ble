@@ -11,7 +11,7 @@
   ],
   "codeowners": ["@antflix"],
   "requirements": [
-    "bleak==0.21.1"
+    "bleak==0.22.3"
   ],
   "iot_class": "local_push",
   "config_flow": true

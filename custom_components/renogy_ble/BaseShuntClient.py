@@ -5,7 +5,7 @@ import configparser
 import asyncio
 from .Utils import bytes_to_int, int_to_bytes, crc16_modbus
 from .BLE import DeviceManager, Device
-
+from bleak import BleakClient
 ALIAS_PREFIX = 'RMTShunt300'
 ALIAS_PREFIX_PRO = 'Shunt300'
 NOTIFY_CHAR_UUID = "0000c411-0000-1000-8000-00805f9b34fb"

@@ -61,7 +61,7 @@ class RenogyBLESensor(Entity):
         safe = base.lower().replace('-', '').replace(' ', '_')
         self.entity_id = f"sensor.{safe}_{sensor_type}"
 
-        _LOGGER.info(f"Initialized sensor {self._name}")
+        logging.info(f"Initialized sensor {self._name}")
 
     @property
     def name(self):
@@ -85,7 +85,23 @@ class RenogyBLESensor(Entity):
             "unit_of_measurement": self._unit_of_measurement,
             "mac_address": self._mac_addr,
         }
+    @property
+    def available(self):
+        """Return True if the sensor is available."""
+        return self._state != "unavailable"
 
+    @property
+    def device_class(self):
+        """Return the device class for UI representation."""
+        if "voltage" in self._sensor_type:
+            return "voltage"
+        elif "amps" in self._sensor_type:
+            return "current"
+        elif "watts" in self._sensor_type:
+            return "power"
+        elif "state_of_charge" in self._sensor_type:
+            return "battery"
+        return None
     def update(self):
         """Update the sensor state."""
         pass
@@ -105,4 +121,4 @@ def update_sensors(hass, data):
             new_state,
             entity.attributes
         )
-        _LOGGER.info(f"Updated sensor: {entity._name} with state: {new_state}")
+        logging.info(f"Updated sensor: {entity._name} with state: {new_state}")
