@@ -2,19 +2,20 @@
 import asyncio
 import logging
 from bleak import BleakClient, BleakScanner
-
+_LOGGER = logging.getLogger(__name__)
 class DeviceManager:
-    def __init__(self, mac_address, alias=None):
+    def __init__(self, mac_address, alias=None, adapter='hci0'):
         self.mac_address = mac_address.upper()
         self.device_alias = alias
+        self.adapter = adapter
         self.device_found = False
         self.device_info = None
 
     async def discover(self, timeout=5):
-        devices = await BleakScanner.discover(timeout=timeout)
+        devices = await BleakScanner.discover(timeout=timeout, adapter=self.adapter)
         for dev in devices:
             if dev.address.upper() == self.mac_address or (self.device_alias and dev.name == self.device_alias):
-                logging.info("Found device: %s [%s]", dev.name, dev.address)
+                _LOGGER.info("Found device: %s [%s]", dev.name, dev.address)
                 self.device_found = True
                 self.device_info = dev
                 break
@@ -35,9 +36,9 @@ class Device:
     async def connect(self):
         try:
             await self.client.connect()
-            logging.info("[%s] Connected", self.mac_address)
+            _LOGGER.info("[%s] Connected", self.mac_address)
             await self.client.start_notify(self.notify_uuid, self._handle_notification)
-            logging.info("[%s] Subscribed to notification %s", self.mac_address, self.notify_uuid)
+            _LOGGER.info("[%s] Subscribed to notification %s", self.mac_address, self.notify_uuid)
             self.on_resolved()
         except Exception as e:
             logging.error("Connection failed: %s", e)
@@ -46,7 +47,7 @@ class Device:
     async def disconnect(self):
         if self.client.is_connected:
             await self.client.disconnect()
-            logging.info("[%s] Disconnected", self.mac_address)
+            _LOGGER.info("[%s] Disconnected", self.mac_address)
 
     def _handle_notification(self, sender, data):
         self.on_data(bytearray(data))
@@ -57,6 +58,6 @@ class Device:
             return
         try:
             await self.client.write_gatt_char(self.write_uuid, bytearray(value), response=True)
-            logging.info("Write successful: %s", self.write_uuid)
+            _LOGGER.info("Write successful: %s", self.write_uuid)
         except Exception as e:
             logging.error("Write failed: %s", e)

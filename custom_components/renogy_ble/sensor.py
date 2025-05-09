@@ -44,7 +44,7 @@ async def async_setup_platform(hass, config, add_entities, discovery_info=None):
 
     add_entities(sensors, True)
     hass.data[DOMAIN]['entities'] = sensors
-    logging.info("Renogy BLE sensors set up successfully.")
+    _LOGGER.info("Renogy BLE sensors set up successfully.")
 
 class RenogyBLESensor(Entity):
     """Representation of a Renogy BLE sensor."""
@@ -61,7 +61,7 @@ class RenogyBLESensor(Entity):
         safe = base.lower().replace('-', '').replace(' ', '_')
         self.entity_id = f"sensor.{safe}_{sensor_type}"
 
-        logging.info(f"Initialized sensor {self._name}")
+        _LOGGER.info(f"Initialized sensor {self._name}")
 
     @property
     def name(self):
@@ -121,4 +121,4 @@ def update_sensors(hass, data):
             new_state,
             entity.attributes
         )
-        logging.info(f"Updated sensor: {entity._name} with state: {new_state}")
+        _LOGGER.info(f"Updated sensor: {entity._name} with state: {new_state}")

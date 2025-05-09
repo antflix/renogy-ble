@@ -4,8 +4,7 @@ import asyncio
 from homeassistant.core import HomeAssistant
 from .sensor import RenogyBLESensor, update_sensors
 from .ShuntClient import ShuntClient
-from .Utils import *
-from . import utils as Utils
+from .Utils import filter_fields
 from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
 _LOGGER = logging.getLogger(__name__)
 
@@ -45,7 +44,7 @@ async def async_setup_entry(hass, entry):
         return False
     hass.data[DOMAIN] = {}
     hass.data[DOMAIN]['entities'] = []
-    logging.info("Renogy BLE entry setup")
+    _LOGGER.info("Renogy BLE entry setup")
     return True
 
 async def async_setup(hass: HomeAssistant, haconfig: dict):
@@ -71,12 +70,12 @@ async def async_setup(hass: HomeAssistant, haconfig: dict):
             sensors.append(sensor)
             hass.states.async_set(sensor.entity_id, sensor.state, sensor.attributes)
     hass.data[DOMAIN]['entities'] = sensors
-    logging.info("Renogy BLE sensors set up successfully.")
+    _LOGGER.info("Renogy BLE sensors set up successfully.")
 
     # Define callbacks
     def on_data_received(client, data):
-        filtered = Utils.filter_fields(data, conf.get('fields', []))
-        logging.info(f"{client.alias or client.mac} => {filtered}")
+        filtered = filter_fields(data, conf.get('fields', []))
+        _LOGGER.info(f"{client.alias or client.mac} => {filtered}")
         if not conf.get('enable_polling', True):
             client.disconnect()
         update_sensors(hass, filtered)
@@ -91,7 +90,7 @@ async def async_setup(hass: HomeAssistant, haconfig: dict):
         client = client_cls(cfg, on_data_received, on_error)
         while True:
             try:
-                await hass.async_add_executor_job(client.connect)
+                hass.async_create_task(client.run())
                 return
             except Exception as e:
                 _LOGGER.error(f"Client connection failed: {e}. Retrying in 5 seconds...")
@@ -107,4 +106,4 @@ async def async_setup(hass: HomeAssistant, haconfig: dict):
             )
         hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STARTED, schedule_connect)
 
-    return True
+    return True                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        

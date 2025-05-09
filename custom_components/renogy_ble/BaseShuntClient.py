@@ -6,6 +6,7 @@ import asyncio
 from .Utils import bytes_to_int, int_to_bytes, crc16_modbus
 from .BLE import DeviceManager, Device
 from bleak import BleakClient
+_LOGGER = logging.getLogger(__name__)
 ALIAS_PREFIX = 'RMTShunt300'
 ALIAS_PREFIX_PRO = 'Shunt300'
 NOTIFY_CHAR_UUID = "0000c411-0000-1000-8000-00805f9b34fb"
@@ -30,7 +31,7 @@ class BaseShuntClient:
         self.reconnect_attempts = 0
         self.manager = None
         self.device = None
-        logging.info(f"Init {self.__class__.__name__}: {self.alias} => {self.mac}")
+        _LOGGER.info(f"Init {self.__class__.__name__}: {self.alias} => {self.mac}")
 
     def start(self):
         asyncio.ensure_future(self._run())
@@ -43,7 +44,7 @@ class BaseShuntClient:
             await self.__on_error(True, e)
 
     async def connect(self):
-        self.manager = DeviceManager(adapter_name=self.adapter, mac_address=self.mac, alias=self.alias)
+        self.manager = DeviceManager(mac_address=self.mac, alias=self.alias, adapter=self.adapter)
         await self.manager.discover()
 
         if not self.manager.device_found:
@@ -65,10 +66,10 @@ class BaseShuntClient:
 
         while self.reconnect_attempts < MAX_RECONNECT_ATTEMPTS:
             try:
-                logging.info(f"Connecting (attempt {self.reconnect_attempts+1})...")
+                _LOGGER.info(f"Connecting (attempt {self.reconnect_attempts+1})...")
                 await self.device.connect()
                 self.reconnect_attempts = 0
-                logging.info("Connected successfully")
+                _LOGGER.info("Connected successfully")
                 return
             except Exception as e:
                 self.reconnect_attempts += 1
@@ -84,8 +85,8 @@ class BaseShuntClient:
         await self.__stop_service()
 
     def __on_resolved(self):
-        logging.info("resolved services")
-        asyncio.ensure_future(self.poll_data() if self.config['data'].getboolean('enable_polling', False) else self.read_section())
+        _LOGGER.info("resolved services")
+        asyncio.ensure_future(self.poll_data() if self.config.get('data', {}).get('enable_polling', False) else self.read_section())
 
     async def read_section(self):
         # Reset data at the start of a full read cycle (section_index == 0)

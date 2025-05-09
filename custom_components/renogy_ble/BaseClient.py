@@ -1,3 +1,4 @@
+
 """
 This file is part of renogy_ble.
 
@@ -21,7 +22,7 @@ import logging
 import traceback
 from .Utils import bytes_to_int, crc16_modbus, int_to_bytes
 from .BLE import DeviceManager, Device
-
+_LOGGER = logging.getLogger(__name__)
 # Base class that works with all Renogy family devices
 # Should be extended by each client with its own parsers and section definitions
 # Section example: {'register': 5000, 'words': 8, 'parser': self.parser_func}
@@ -44,8 +45,45 @@ class BaseClient:
         self.sections = []
         self.section_index = 0
         self.loop = self._get_or_create_event_loop()  # Ensure the event loop is assigned here
-        logging.info(f"Init {self.__class__.__name__}: {self.config['device']['alias']} => {self.config['device']['mac_addr']}")
+        _LOGGER.info(f"Init {self.__class__.__name__}: {self.config['device']['alias']} => {self.config['device']['mac_addr']}")
+        
+    async def run(self):
+        """Continuously discover, connect, and poll data every 10 seconds."""
+        while True:
+            try:
+                self.manager = DeviceManager(
+                    mac_address=self.config['device']['mac_addr'],
+                    alias=self.config['device']['alias'],
+                    adapter=self.config['device'].get('adapter', 'hci0')
+                )
+                await self.manager.discover()
+                if not self.manager.device_found:
+                    _LOGGER.warning("Device not found: %s", self.config['device']['mac_addr'])
+                    await asyncio.sleep(10)
+                    continue
 
+                self.device = Device(
+                    mac_address=self.config['device']['mac_addr'],
+                    on_resolved=self.__on_resolved,
+                    on_data=self.on_data_received,
+                    on_connect_fail=self.__on_connect_fail,
+                    notify_uuid=NOTIFY_CHAR_UUID,
+                    write_uuid=WRITE_CHAR_UUID
+                )
+                await self.device.connect()
+
+                # Initial read
+                await self.read_section()
+
+                # Loop and poll every 10 seconds
+                while True:
+                    await asyncio.sleep(10)
+                    await self.read_section()
+            except Exception as e:
+                _LOGGER.error(f"[RUN LOOP] Exception: {e}")
+                await self.disconnect()
+                await asyncio.sleep(10)
+                
     def _get_or_create_event_loop(self):
         try:
             return asyncio.get_running_loop()
@@ -91,10 +129,10 @@ class BaseClient:
                 self.sections[self.section_index]['parser'] != None and
                 self.sections[self.section_index]['words'] * 2 + 5 == len(response)):
                 # call the parser and update data
-                logging.info(f"on_data_received: read operation success")
+                _LOGGER.info(f"on_data_received: read operation success")
                 self.__safe_parser(self.sections[self.section_index]['parser'], response)
             else:
-                logging.info(f"on_data_received: read operation failed: {response.hex()}")
+                _LOGGER.info(f"on_data_received: read operation failed: {response.hex()}")
 
             if self.section_index >= len(self.sections) - 1: # last section, read complete
                 self.section_index = 0
@@ -108,7 +146,7 @@ class BaseClient:
             logging.warning("on_data_received: unknown operation={}".format(operation))
 
     def on_read_operation_complete(self):
-        logging.info("on_read_operation_complete")
+        _LOGGER.info("on_read_operation_complete")
         self.data['__device'] = self.config['device']['alias']
         self.data['__client'] = self.__class__.__name__
         self.__safe_callback(self.on_data_callback, self.data)
@@ -118,7 +156,7 @@ class BaseClient:
         self.stop()
 
     async def check_polling(self):
-        if self.config['data'].getboolean('enable_polling'):
+        if self.config.get('data', {}).get('enable_polling', False):
             await asyncio.sleep(self.config['data'].getint('poll_interval'))
             await self.read_section()
 
@@ -135,7 +173,7 @@ class BaseClient:
         await self.device.characteristic_write_value(request)
 
     def __on_resolved(self):
-        logging.info("resolved services")
+        _LOGGER.info("resolved services")
         self.loop.create_task(self.read_section())
 
     def create_generic_read_request(self, device_id, function, regAddr, readWrd):

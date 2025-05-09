@@ -2,7 +2,7 @@ import logging
 # from .BaseClient import BaseClient
 from .BaseShuntClient import BaseShuntClient as BaseClient
 from .Utils import bytes_to_int, parse_temperature
-
+_LOGGER = logging.getLogger(__name__)
 # Read and parse BT-1 RS232 type bluetooth module connected to Renogy Rover/Wanderer/Adventurer
 # series charge controllers. Also works with BT-2 RS485 module on Rover Elite, DC Charger etc.
 # Does not support Communication Hub with multiple devices connected
@@ -40,7 +40,7 @@ class ShuntClient(BaseClient):
             super().on_data_received(response)
 
     def on_write_operation_complete(self):
-        logging.info("on_write_operation_complete")
+        _LOGGER.info("on_write_operation_complete")
         if self.on_data_callback is not None:
             self.on_data_callback(self, self.data)
 
