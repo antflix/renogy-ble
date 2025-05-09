@@ -58,4 +58,6 @@ class ShuntClient(BaseClient):
         self.data.update(data)
         # logging.debug(msg=f"DATA: {self.data}")
         return data
-        
+
+    async def run(self):
+        await super().run()
