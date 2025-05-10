@@ -60,4 +60,7 @@ class ShuntClient(BaseClient):
         return data
 
     async def run(self):
-        await super().run()
+        try:
+            await super(ShuntClient, self).run()
+        except AttributeError:
+            _LOGGER.error("BaseClient has no run method. Cannot execute run().")

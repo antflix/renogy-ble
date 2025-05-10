@@ -6,6 +6,9 @@ import asyncio
 from .Utils import bytes_to_int, int_to_bytes, crc16_modbus
 from .BLE import DeviceManager, Device
 from bleak import BleakClient
+from .BaseClient import BaseClient
+
+
 _LOGGER = logging.getLogger(__name__)
 ALIAS_PREFIX = 'RMTShunt300'
 ALIAS_PREFIX_PRO = 'Shunt300'
@@ -14,8 +17,7 @@ WRITE_CHAR_UUID  = ""
 READ_TIMEOUT = 30
 RECONNECT_DELAY = 5
 MAX_RECONNECT_ATTEMPTS = 15
-
-class BaseShuntClient:
+class BaseShuntClient(BaseClient):
     def __init__(self, config):
         self.config = config
         dev = config.get('device', config)
@@ -39,7 +41,6 @@ class BaseShuntClient:
     async def _run(self):
         try:
             await self.connect()
-            await self.manager.run()
         except Exception as e:
             await self.__on_error(True, e)
 
@@ -49,9 +50,6 @@ class BaseShuntClient:
 
         if not self.manager.device_found:
             logging.error(f"Device not found: {self.alias} => {self.mac}")
-            for dev in self.manager.devices():
-                if dev.alias() and (dev.alias().startswith(ALIAS_PREFIX) or dev.alias().startswith(ALIAS_PREFIX_PRO)):
-                    logging.debug(f"Possible device: {dev.alias()} [{dev.mac_address}]")
             return await self.__stop_service()
 
         self.device = Device(
@@ -154,5 +152,6 @@ class BaseShuntClient:
                 logging.error(f"Exception in callback: {e}")
 
     async def __stop_service(self):
-        if self.manager:
-            await self.manager.stop()
+        # Clean up resources: disconnect device if connected
+        if self.device:
+            await self.device.disconnect()

@@ -90,7 +90,7 @@ async def async_setup(hass: HomeAssistant, haconfig: dict):
         client = client_cls(cfg, on_data_received, on_error)
         while True:
             try:
-                hass.async_create_task(client.run())
+                client.start()
                 return
             except Exception as e:
                 _LOGGER.error(f"Client connection failed: {e}. Retrying in 5 seconds...")
