@@ -54,7 +54,6 @@ class BaseShuntClient(BaseClient):
 
         self.device = Device(
             mac_address=self.mac,
-            manager=self.manager,
             on_resolved=self.__on_resolved,
             on_data=self.on_data_received,
             on_connect_fail=self.__on_connect_fail,
@@ -132,7 +131,15 @@ class BaseShuntClient(BaseClient):
 
     async def poll_data(self):
         await self.read_section()
-        await asyncio.sleep(self.config['data'].getint('poll_interval', 60))
+        # Safely fetch a poll_interval (default 60s)
+        data_cfg = self.config.get('data', {})  # may be a dict or ConfigParser section
+        if hasattr(data_cfg, 'getint'):
+            interval = data_cfg.getint('poll_interval', 60)
+        else:
+            # plain dict lookup; ensure it’s an int
+            interval = int(data_cfg.get('poll_interval', 60))
+        await asyncio.sleep(interval)
+        # recurse
         await self.poll_data()
 
     async def __on_error(self, connectFailed=False, error=None):
