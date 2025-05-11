@@ -49,7 +49,7 @@ class BaseShuntClient(BaseClient):
         await self.manager.discover()
 
         if not self.manager.device_found:
-            logging.error(f"Device not found: {self.alias} => {self.mac}")
+            _LOGGER.error(f"Device not found: {self.alias} => {self.mac}")
             return await self.__stop_service()
 
         self.device = Device(
@@ -82,73 +82,52 @@ class BaseShuntClient(BaseClient):
         await self.__stop_service()
 
     def __on_resolved(self):
-        _LOGGER.info("resolved services")
-        asyncio.ensure_future(self.poll_data() if self.config.get('data', {}).get('enable_polling', False) else self.read_section())
+        _LOGGER.info("Services resolved; listening for notifications")
+        # No manual read or polling required; rely on BLE notifications
 
-    async def read_section(self):
-        # Reset data at the start of a full read cycle (section_index == 0)
-        if self.section_index == 0:
-            self.data = {}
-        if not self.sections or self.device_id is None:
-            logging.error("No sections or device_id defined")
-            return
+    # Manual read_section logic is not needed with notification-only mode.
+    # async def read_section(self):
+    #     pass
 
-        req = self.create_generic_read_request(self.device_id, 3, self.sections[self.section_index]['register'], self.sections[self.section_index]['words'])
-        await self.device.characteristic_write_value(req)
-        self.read_timeout_task = self.loop.call_later(READ_TIMEOUT, lambda: asyncio.ensure_future(self.on_read_timeout()))
-
-    async def on_read_timeout(self):
-        logging.error("on_read_timeout => please check your device_id!")
-        await self.disconnect()
+    # async def on_read_timeout(self):
+    #     pass
 
     def on_data_received(self, response):
         if self.read_timeout_task and not self.read_timeout_task.cancelled():
             self.read_timeout_task.cancel()
 
         operation = bytes_to_int(response, 1, 1)
-        if operation == 87 and self.section_index < len(self.sections):
-            parser = self.sections[self.section_index].get('parser')
-            if parser:
-                parsed_data = parser(response)
-                if isinstance(parsed_data, dict):
-                    self.data.update(parsed_data)
-            if self.section_index >= len(self.sections) - 1:
-                self.section_index = 0
-                self.__safe_callback(self.on_data_callback, self.data)
-                asyncio.ensure_future(self.poll_data())
-            else:
-                self.section_index += 1
-                asyncio.ensure_future(self.read_section())
+        if operation == 87:
+            # Parse incoming notification data
+            for section in self.sections:
+                parser = section.get('parser')
+                if parser:
+                    parsed = parser(response)
+                    if isinstance(parsed, dict):
+                        self.data.update(parsed)
+            # Emit the collected data
+            self.__safe_callback(self.on_data_callback, self.data)
         else:
-            logging.warning(f"Unknown operation={operation}")
+            _LOGGER.warning(f"Unknown operation={operation}")
 
     def create_generic_read_request(self, device_id, function, regAddr, readWrd):
         data = [device_id, function, int_to_bytes(regAddr, 0), int_to_bytes(regAddr, 1), int_to_bytes(readWrd, 0), int_to_bytes(readWrd, 1)]
         crc = crc16_modbus(bytes(data))
         data.extend([crc[0], crc[1]])
-        logging.debug(f"create_request_payload {regAddr} => {data}")
+        _LOGGER.debug(f"create_request_payload {regAddr} => {data}")
         return data
 
-    async def poll_data(self):
-        await self.read_section()
-        # Safely fetch a poll_interval (default 60s)
-        data_cfg = self.config.get('data', {})  # may be a dict or ConfigParser section
-        if hasattr(data_cfg, 'getint'):
-            interval = data_cfg.getint('poll_interval', 60)
-        else:
-            # plain dict lookup; ensure it’s an int
-            interval = int(data_cfg.get('poll_interval', 60))
-        await asyncio.sleep(interval)
-        # recurse
-        await self.poll_data()
+    # Polling is not needed in notification-only mode.
+    # async def poll_data(self):
+    #     pass
 
     async def __on_error(self, connectFailed=False, error=None):
-        logging.error(f"Exception occurred: {error}")
+        _LOGGER.error(f"Exception occurred: {error}")
         self.__safe_callback(self.on_error_callback, error)
         await (self.__stop_service() if connectFailed else self.disconnect())
 
     def __on_connect_fail(self, error):
-        logging.error(f"Connection failed: {error}")
+        _LOGGER.error(f"Connection failed: {error}")
         asyncio.ensure_future(self.__on_error(True, error))
 
     def __safe_callback(self, callback, param):
@@ -156,7 +135,7 @@ class BaseShuntClient(BaseClient):
             try:
                 callback(self, param)
             except Exception as e:
-                logging.error(f"Exception in callback: {e}")
+                _LOGGER.error(f"Exception in callback: {e}")
 
     async def __stop_service(self):
         # Clean up resources: disconnect device if connected

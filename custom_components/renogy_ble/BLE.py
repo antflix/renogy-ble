@@ -58,6 +58,6 @@ class Device:
             return
         try:
             await self.client.write_gatt_char(self.write_uuid, bytearray(value), response=True)
-            _LOGGER.info("Write successful: %s", self.write_uuid)
+            _LOGGER.debug("Write characteristic not set; skipping write attempt")
         except Exception as e:
             logging.error("Write failed: %s", e)
