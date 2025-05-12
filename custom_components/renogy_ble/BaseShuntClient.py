@@ -35,14 +35,16 @@ class BaseShuntClient(BaseClient):
         self.device = None
         _LOGGER.info(f"Init {self.__class__.__name__}: {self.alias} => {self.mac}")
 
-    def start(self):
-        asyncio.ensure_future(self._run())
+    async def run(self):
+        """Notification-only mode: connect once and then wait for notifications indefinitely."""
+        await self.connect()
+        # Keep the task alive so notifications continue to be processed
+        while True:
+            await asyncio.sleep(60)
 
-    async def _run(self):
-        try:
-            await self.connect()
-        except Exception as e:
-            await self.__on_error(True, e)
+    def start(self):
+        """Begin notification-only client."""
+        asyncio.ensure_future(self.run())
 
     async def connect(self):
         self.manager = DeviceManager(mac_address=self.mac, alias=self.alias, adapter=self.adapter)

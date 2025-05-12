@@ -59,7 +59,12 @@ class RenogyBLESensor(Entity):
         # guard missing device_name by falling back to MAC
         base = device_name or mac_addr
         safe = base.lower().replace('-', '').replace(' ', '_')
+
+        # Build the entity_id (e.g. sensor.mydevice_charge_battery_voltage)
         self.entity_id = f"sensor.{safe}_{sensor_type}"
+
+        # Use the entity_id itself as the unique_id so they match exactly
+        self._attr_unique_id = self.entity_id
 
         _LOGGER.info(f"Initialized sensor {self._name}")
 
@@ -102,6 +107,11 @@ class RenogyBLESensor(Entity):
         elif "state_of_charge" in self._sensor_type:
             return "battery"
         return None
+    @property
+    def unique_id(self):
+        """Return the unique ID of this sensor."""
+        return self._attr_unique_id
+
     def update(self):
         """Update the sensor state."""
         pass
