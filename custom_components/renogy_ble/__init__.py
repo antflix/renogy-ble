@@ -2,6 +2,7 @@
 import logging
 import asyncio
 from homeassistant.core import HomeAssistant
+from homeassistant.config_entries import ConfigEntry
 from .sensor import RenogyBLESensor, update_sensors
 from .ShuntClient import ShuntClient
 from .Utils import filter_fields
@@ -38,13 +39,41 @@ SENSOR_TYPES = {
     'state_of_charge': ['State of Charge', '%'],
 }
 
-async def async_setup_entry(hass, entry):
-    if DOMAIN in hass.data:
-        _LOGGER.warning("Renogy BLE already set up. Skipping duplicate setup.")
-        return False
-    hass.data[DOMAIN] = {}
-    hass.data[DOMAIN]['entities'] = []
-    _LOGGER.info("Renogy BLE entry setup")
+async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Set up Renogy BLE from a config entry."""
+    hass.data.setdefault(DOMAIN, {})
+    hass.data[DOMAIN][entry.entry_id] = entry.data
+
+    conf = entry.data
+
+    # Callbacks for BLE client
+    def on_data_received(client, data):
+        from .sensor import update_sensors
+        update_sensors(data)
+
+    def on_error(client, error):
+        _LOGGER.error(f"BLE client error: {error}")
+        from .sensor import update_sensors
+        update_sensors({})
+
+    async def connect_client(cfg):
+        client = ShuntClient(cfg, on_data_received, on_error)
+        while True:
+            try:
+                client.start()
+                return
+            except Exception as e:
+                _LOGGER.error(f"Client connection failed: {e}. Retrying in 5 seconds...")
+                await asyncio.sleep(5)
+
+    # Schedule connection after Home Assistant startup
+    def schedule_connect(event):
+        hass.loop.create_task(connect_client(conf))
+
+    hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STARTED, schedule_connect)
+
+    # Forward the config entry to the sensor platform
+    hass.config_entries.async_forward_entry_setup(entry, "sensor")
     return True
 
 async def async_setup(hass: HomeAssistant, haconfig: dict):
@@ -107,3 +136,23 @@ async def async_setup(hass: HomeAssistant, haconfig: dict):
         hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STARTED, schedule_connect)
 
     return True                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        
+
+async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Unload a Renogy BLE config entry."""
+    # Tell HA to unload the sensor platform
+    await hass.config_entries.async_forward_entry_unload(entry, "sensor")
+
+    # Then remove your entities from hass.data and HA states as before
+    alias = entry.data.get("alias")
+    to_remove = [
+        ent for ent in hass.data[DOMAIN]["entities"]
+        if getattr(ent, "alias", None) == alias
+    ]
+    hass.data[DOMAIN]["entities"] = [
+        ent for ent in hass.data[DOMAIN]["entities"]
+        if getattr(ent, "alias", None) != alias
+    ]
+    for ent in to_remove:
+        hass.states.async_remove(ent.entity_id)
+
+    return True

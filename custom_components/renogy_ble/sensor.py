@@ -1,4 +1,4 @@
- # pylint: disable=missing-function-docstring, missing-class-docstring, missing-module-docstring
+# pylint: disable=missing-function-docstring, missing-class-docstring, missing-module-docstring
 """
 This file is part of renogy_ble.
 
@@ -17,12 +17,14 @@ along with renogy_ble. If not, see <https://www.gnu.org/licenses/>.
 """
 import logging
 _LOGGER = logging.getLogger(__name__)
-from homeassistant.helpers.entity import Entity
 
-DOMAIN = "renogy_ble"
+from homeassistant.helpers.entity import Entity
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import HomeAssistant
+
+from .const import DOMAIN
 
 SENSOR_TYPES = {
-    # Shunt-specific sensors
     'charge_battery_voltage': ['Charge Battery Voltage', 'V'],
     'starter_battery_voltage': ['Starter Battery Voltage', 'V'],
     'discharge_amps': ['Discharge Amps', 'A'],
@@ -30,105 +32,95 @@ SENSOR_TYPES = {
     'state_of_charge': ['State of Charge', '%'],
 }
 
-async def async_setup_platform(hass, config, add_entities, discovery_info=None):
-    """Set up the Renogy BLE sensors."""
-    if discovery_info is None:
-        logging.error("No discovery information provided.")
-        return
+# List of current sensor entities
+ENTITIES = []
 
-    sensors = []
-    alias = discovery_info.get('alias')
-    mac_addr = discovery_info.get('mac_addr')
-    for sensor_type in SENSOR_TYPES:
-        sensors.append(RenogyBLESensor(sensor_type, alias, mac_addr))
 
-    add_entities(sensors, True)
-    hass.data[DOMAIN]['entities'] = sensors
-    #LOGGER.info("Renogy BLE sensors set up successfully.")
+async def async_setup_entry(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    async_add_entities
+) -> None:
+    """Set up Renogy BLE sensors from a config entry."""
+    conf = entry.data
+    alias = conf.get("alias")
+    mac = conf.get("mac")
+
+    entities = [
+        RenogyBLESensor(sensor_type, alias, mac)
+        for sensor_type in SENSOR_TYPES
+    ]
+    async_add_entities(entities, True)
+
+    # Keep track for updates/unload
+    hass.data.setdefault(DOMAIN, {}).setdefault("entities", []).extend(entities)
+    ENTITIES.extend(entities)
+
 
 class RenogyBLESensor(Entity):
-    """Representation of a Renogy BLE sensor."""
+    """Representation of a single Renogy BLE sensor."""
 
-    def __init__(self, sensor_type, device_name, mac_addr):
+    def __init__(self, sensor_type: str, device_name: str, mac_addr: str):
         self._sensor_type = sensor_type
         self._name = f"{device_name or mac_addr} {SENSOR_TYPES[sensor_type][0]}"
         self._unit_of_measurement = SENSOR_TYPES[sensor_type][1]
         self._state = "unavailable"
         self._mac_addr = mac_addr
 
-        # guard missing device_name by falling back to MAC
-        base = device_name or mac_addr
-        safe = base.lower().replace('-', '').replace(' ', '_')
-
-        # Build the entity_id (e.g. sensor.mydevice_charge_battery_voltage)
-        self.entity_id = f"sensor.{safe}_{sensor_type}"
-
-        # Use the entity_id itself as the unique_id so they match exactly
+        # Build a safe entity_id, e.g. sensor.mydevice_charge_battery_voltage
+        base = (device_name or mac_addr).lower().replace('-', '').replace(' ', '_')
+        self.entity_id = f"sensor.{base}_{sensor_type}"
         self._attr_unique_id = self.entity_id
 
-        #LOGGER.info(f"Initialized sensor {self._name}")
-
     @property
-    def name(self):
-        """Return the name of the sensor."""
+    def name(self) -> str:
         return self._name
 
     @property
     def state(self):
-        """Return the state of the sensor."""
         return self._state
 
     @property
-    def unit_of_measurement(self):
-        """Return the unit of measurement."""
+    def unit_of_measurement(self) -> str:
         return self._unit_of_measurement
 
     @property
-    def attributes(self):
-        """Return the sensor attributes."""
+    def attributes(self) -> dict:
         return {
             "unit_of_measurement": self._unit_of_measurement,
             "mac_address": self._mac_addr,
         }
+
     @property
-    def available(self):
-        """Return True if the sensor is available."""
+    def available(self) -> bool:
         return self._state != "unavailable"
 
     @property
     def device_class(self):
-        """Return the device class for UI representation."""
         if "voltage" in self._sensor_type:
             return "voltage"
-        elif "amps" in self._sensor_type:
+        if "amps" in self._sensor_type:
             return "current"
-        elif "watts" in self._sensor_type:
+        if "watts" in self._sensor_type:
             return "power"
-        elif "state_of_charge" in self._sensor_type:
+        if "state_of_charge" in self._sensor_type:
             return "battery"
         return None
+
     @property
-    def unique_id(self):
-        """Return the unique ID of this sensor."""
+    def unique_id(self) -> str:
         return self._attr_unique_id
 
     def update(self):
-        """Update the sensor state."""
+        """Called by Home Assistant to refresh state; we do nothing."""
         pass
 
-def update_sensors(hass, data):
-    """Update the sensors with new data."""
-    for entity in hass.data.get(DOMAIN, {}).get('entities', []):
+
+def update_sensors(data: dict) -> None:
+    """Push new BLE data into each sensor and schedule a state update."""
+    for entity in ENTITIES:
         new_state = data.get(entity._sensor_type)
-        # Only update sensors for which we have new data
         if new_state is None:
             continue
         entity._state = new_state
-        # Schedule HA state update on main thread
-        hass.loop.call_soon_threadsafe(
-            hass.states.async_set,
-            entity.entity_id,
-            new_state,
-            entity.attributes
-        )
-        #LOGGER.info(f"Updated sensor: {entity._name} with state: {new_state}")
+        entity.schedule_update_ha_state()

@@ -95,7 +95,13 @@ class RenogyBLEConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
     async def async_step_confirm_entry(self, user_input=None):
+        await self.async_set_unique_id(user_input["mac"])
+        self._abort_if_unique_id_configured()
         return self.async_create_entry(title=user_input["alias"], data=user_input)
+
+    async def async_step_import(self, import_config):
+        """Import existing YAML config into config entries."""
+        return await self.async_step_user(import_config)
 
     async def _async_scan_ble(self):
         return await BleakScanner.discover()
