@@ -66,7 +66,7 @@ class RenogyBLEConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         device = self.device_index[selected_mac]
 
         alias = device.name or "Renogy Shunt"
-        adapter = self._get_default_adapter()
+        adapter = await self._get_default_adapter()
         device_id = "255"
 
         schema = vol.Schema({
@@ -82,10 +82,11 @@ class RenogyBLEConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
     async def async_step_manual(self, user_input=None):
+        adapter = await self._get_default_adapter()
         schema = vol.Schema({
             vol.Required("alias", default="Renogy Shunt"): str,
             vol.Required("mac"): str,
-            vol.Required("adapter", default=self._get_default_adapter()): str,
+            vol.Required("adapter", default=adapter): str,
             vol.Required("device_id", default="255"): str,
         })
 
@@ -106,6 +107,9 @@ class RenogyBLEConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def _async_scan_ble(self):
         return await BleakScanner.discover()
 
-    def _get_default_adapter(self):
-        adapters = [f for f in os.listdir("/sys/class/bluetooth/") if f.startswith("hci")]
+    async def _get_default_adapter(self):
+        # Run blocking os.listdir in executor
+        adapters = await self.hass.async_add_executor_job(
+            lambda: [f for f in os.listdir("/sys/class/bluetooth/") if f.startswith("hci")]
+        )
         return adapters[0] if adapters else "hci0"
