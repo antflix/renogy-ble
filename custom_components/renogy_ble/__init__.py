@@ -75,7 +75,7 @@ async def async_setup(hass: HomeAssistant, haconfig: dict):
     # Define callbacks
     def on_data_received(client, data):
         filtered = filter_fields(data, conf.get('fields', []))
-        _LOGGER.info(f"{client.alias or client.mac} => {filtered}")
+        _LOGGER.debug(f"{client.alias or client.mac} => {filtered}")
         if not conf.get('enable_polling', True):
             client.disconnect()
         update_sensors(hass, filtered)
