@@ -77,17 +77,20 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return True
 
 async def async_setup(hass: HomeAssistant, haconfig: dict):
-    """Set up Renogy BLE from YAML config."""
-    if DOMAIN not in hass.data:
-        hass.data[DOMAIN] = {}
+    """Set up Renogy BLE from YAML config (optional)."""
+    # Skip YAML setup when no YAML config is present
+    conf = haconfig.get(DOMAIN)
+    if not conf:
+        return True
+
+    # Initialize storage
+    hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN]['entities'] = []
 
-    # Read configuration from YAML
-    conf = haconfig.get(DOMAIN, {})
     devices = conf.get('devices', [])
     if not devices:
-        _LOGGER.error("No devices configured under renogy_ble.devices")
-        return False
+        _LOGGER.warning("No devices configured under renogy_ble.devices, skipping YAML setup")
+        return True
 
     # Create sensor entities and register initial states
     sensors = []
