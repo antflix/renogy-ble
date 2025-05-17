@@ -23,7 +23,7 @@ class BaseShuntClient(BaseClient):
         dev = config.get('device', config)
         self.device_id = int(dev['device_id'])
         self.alias = dev['alias']
-        self.mac = dev['mac_addr']
+        self.mac = dev.get('mac_addr', dev.get('mac'))
         self.adapter = dev.get('adapter', 'hci0')
         self.sections = []
         self.section_index = 0
