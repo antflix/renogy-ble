@@ -1,0 +1,26 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Renogy BLE Setup",
+        "description": "Would you like to scan for nearby Bluetooth devices?",
+        "data": {
+          "scan_for_devices": "Scan for nearby devices"
+        }
+      },
+      "confirm_entry": {
+        "title": "Confirm Device Details",
+        "description": "Enter the required connection details.",
+        "data": {
+          "alias": "Shunt Alias",
+          "mac": "MAC Address",
+          "adapter": "Bluetooth Adapter (e.g., hci0)",
+          "device_id": "Device ID (default is 255)"
+        }
+      }
+    }
+  },
+  "abort": {
+    "bleak_not_installed": "The bleak package is not installed. Please add it to your manifest.json."
+  }
+}
