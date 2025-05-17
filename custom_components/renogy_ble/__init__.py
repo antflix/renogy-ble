@@ -107,11 +107,11 @@ async def async_setup(hass: HomeAssistant, haconfig: dict):
         _LOGGER.debug(f"{client.alias or client.mac} => {filtered}")
         if not conf.get('enable_polling', True):
             client.disconnect()
-        update_sensors(hass, filtered)
+        update_sensors(filtered)
 
     def on_error(client, error):
         _LOGGER.error(f"BLE client error: {error}")
-        update_sensors(hass, {})
+        update_sensors({})
 
     # Connection coroutine
     async def connect_client(cfg):
@@ -123,7 +123,7 @@ async def async_setup(hass: HomeAssistant, haconfig: dict):
                 return
             except Exception as e:
                 _LOGGER.error(f"Client connection failed: {e}. Retrying in 5 seconds...")
-                update_sensors(hass, {})
+                update_sensors({})
                 await asyncio.sleep(5)
 
     # Schedule connection after HA startup
