@@ -73,7 +73,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STARTED, schedule_connect)
 
     # Forward the config entry to the sensor platform
-    await hass.config_entries.async_forward_entry_setup(entry, "sensor")
+    await hass.config_entries.async_forward_entry_setups(entry, ["sensor"])
     return True
 
 async def async_setup(hass: HomeAssistant, haconfig: dict):
