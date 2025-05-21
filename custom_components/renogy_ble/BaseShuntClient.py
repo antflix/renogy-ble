@@ -128,13 +128,7 @@ class BaseShuntClient(BaseClient):
             if buffer[i+1] == HEADER_BYTE:
                 candidate = buffer[i:i+MIN_LENGTH]
                 if len(candidate) >= MIN_LENGTH:
-                    payload = candidate[:-2]
-                    received_crc = candidate[-2:]
-                    calculated_crc = crc16_modbus(payload)
-                    if received_crc == bytes(calculated_crc):
-                        return candidate
-                    else:
-                        _LOGGER.warning("CRC check failed for candidate at offset %d", i)
+                    return candidate
         return None
 
     def create_generic_read_request(self, device_id, function, regAddr, readWrd):
