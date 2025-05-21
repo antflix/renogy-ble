@@ -1,4 +1,6 @@
 
+
+import time
 import os
 import logging
 import configparser
@@ -34,6 +36,7 @@ class BaseShuntClient(BaseClient):
         self.manager = None
         self.device = None
         _LOGGER.info(f"Init {self.__class__.__name__}: {self.alias} => {self.mac}")
+        self._last_log_time = 0
 
     async def run(self):
         """Notification-only mode: connect once and then wait for notifications indefinitely."""
@@ -98,19 +101,41 @@ class BaseShuntClient(BaseClient):
         if self.read_timeout_task and not self.read_timeout_task.cancelled():
             self.read_timeout_task.cancel()
 
+        response = self._realign_packet(response)
+        if not response:
+            _LOGGER.warning("Could not realign packet; skipping.")
+            return
+
         operation = bytes_to_int(response, 1, 1)
         if operation == 87:
-            # Parse incoming notification data
             for section in self.sections:
                 parser = section.get('parser')
                 if parser:
                     parsed = parser(response)
                     if isinstance(parsed, dict):
                         self.data.update(parsed)
-            # Emit the collected data
-            self.__safe_callback(self.on_data_callback, self.data)
+            current_time = time.time()
+            if current_time - self._last_log_time >= 10:
+                self._last_log_time = current_time
+                self.__safe_callback(self.on_data_callback, self.data)
         else:
             _LOGGER.warning(f"Unknown operation={operation}")
+
+    def _realign_packet(self, buffer):
+        MIN_LENGTH = 73
+        HEADER_BYTE = 0x57
+        for i in range(len(buffer) - MIN_LENGTH + 1):
+            if buffer[i+1] == HEADER_BYTE:
+                candidate = buffer[i:i+MIN_LENGTH]
+                if len(candidate) >= MIN_LENGTH:
+                    payload = candidate[:-2]
+                    received_crc = candidate[-2:]
+                    calculated_crc = crc16_modbus(payload)
+                    if received_crc == bytes(calculated_crc):
+                        return candidate
+                    else:
+                        _LOGGER.warning("CRC check failed for candidate at offset %d", i)
+        return None
 
     def create_generic_read_request(self, device_id, function, regAddr, readWrd):
         data = [device_id, function, int_to_bytes(regAddr, 0), int_to_bytes(regAddr, 1), int_to_bytes(readWrd, 0), int_to_bytes(readWrd, 1)]
